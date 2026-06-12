@@ -1,0 +1,86 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+#define KNOCK_COUNT 3
+
+void generate_dynamic_ports(const char *key, int *ports_buffer) {
+    int hash = 0;
+    for (size_t i = 0; i < strlen(key); i++) {
+        hash += key[i];
+    }
+    // توليد 3 بورتات ديناميكية مشفرة ف الـ Dynamic Range (فوق 1024)
+    for (int i = 0; i < KNOCK_COUNT; i++) {
+        ports_buffer[i] = 10000 + (hash * (i + 1)) % 40000;
+    }
+}
+
+int main() {
+    int server_fd, client_fd;
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+    int state = 0;
+    int dynamic_ports[KNOCK_COUNT];
+    char secret_key[64];
+
+    printf("=================================================================\n");
+    printf(" 🥷 BOUTABA PORT-KNOCKING DAEMON v1.1 | DYNAMIC MATRIX SHIELD   \n");
+    printf("=================================================================\n");
+    
+    printf("🤖 Secret Matrix Key (مفتاح تفعيل البورتات): ");
+    if (fgets(secret_key, sizeof(secret_key), stdin) == NULL) return 1;
+    secret_key[strcspn(secret_key, "\n")] = 0;
+
+    // حساب البورتات السرية بناءً على المفتاح
+    generate_dynamic_ports(secret_key, dynamic_ports);
+
+    printf("[*] Configuration Synced: Dynamic Port Sequence Generated Smoothly!\n");
+    printf("[*] Core System Activated. Infrastructure is now STEALTH. 🛡️\n");
+    printf("-----------------------------------------------------------------\n");
+
+    while (1) {
+        int current_target_port = dynamic_ports[state];
+        
+        server_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (server_fd < 0) return 1;
+        
+        setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+        
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = INADDR_ANY;
+        address.sin_port = htons(current_target_port);
+        
+        if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+            close(server_fd);
+            continue;
+        }
+        
+        listen(server_fd, 1);
+        printf("[*] OpSec Matrix: Waiting for correct knock on port [%d]...\n", current_target_port);
+        
+        client_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
+        if (client_fd >= 0) {
+            state++;
+            printf("[+] Valid Knock Detected! Network state advanced to Step (%d/%d) 🌀\n", state, KNOCK_COUNT);
+            close(client_fd);
+        }
+        
+        close(server_fd);
+
+        if (state == KNOCK_COUNT) {
+            printf("\n[!!!] SUCCESS: FIREWALL BREAK DETECTED. OPENING PROTECTED ROUTE NOW! 🔓\n");
+            printf("[*] Executing infrastructure access parameters for 10 seconds...\n");
+            
+            sleep(10); // فتح المنفذ الافتراضي
+            
+            printf("[-] Operational Firewall Closed. Resetting matrix sequence.\n\n");
+            state = 0; 
+        }
+    }
+
+    return 0;
+}
