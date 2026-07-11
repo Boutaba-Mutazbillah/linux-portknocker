@@ -28,10 +28,10 @@ int main() {
     char secret_key[64];
 
     printf("=================================================================\n");
-    printf(" 🥷 BOUTABA PORT-KNOCKING DAEMON v1.1 | DYNAMIC MATRIX SHIELD   \n");
+    printf("                 stealth-port-knocking        \n");
     printf("=================================================================\n");
     
-    printf("🤖 Secret Matrix Key (مفتاح تفعيل البورتات): ");
+    printf(" Secret Matrix Key (مفتاح تفعيل البورتات): ");
     if (fgets(secret_key, sizeof(secret_key), stdin) == NULL) return 1;
     secret_key[strcspn(secret_key, "\n")] = 0;
 
@@ -39,7 +39,7 @@ int main() {
     generate_dynamic_ports(secret_key, dynamic_ports);
 
     printf("[*] Configuration Synced: Dynamic Port Sequence Generated Smoothly!\n");
-    printf("[*] Core System Activated. Infrastructure is now STEALTH. 🛡️\n");
+    printf("[*] Core System Activated. Infrastructure is now STEALTH. \n");
     printf("-----------------------------------------------------------------\n");
 
     while (1) {
@@ -65,14 +65,14 @@ int main() {
         client_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
         if (client_fd >= 0) {
             state++;
-            printf("[+] Valid Knock Detected! Network state advanced to Step (%d/%d) 🌀\n", state, KNOCK_COUNT);
+            printf("[+] Valid Knock Detected! Network state advanced to Step (%d/%d) \n", state, KNOCK_COUNT);
             close(client_fd);
         }
         
         close(server_fd);
 
         if (state == KNOCK_COUNT) {
-            printf("\n[!!!] SUCCESS: FIREWALL BREAK DETECTED. OPENING PROTECTED ROUTE NOW! 🔓\n");
+            printf("\n[!!!] SUCCESS: FIREWALL BREAK DETECTED. OPENING PROTECTED ROUTE NOW! \n");
             printf("[*] Executing infrastructure access parameters for 10 seconds...\n");
             
             sleep(10); // فتح المنفذ الافتراضي
