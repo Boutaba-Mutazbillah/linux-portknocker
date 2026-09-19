@@ -1,86 +1,168 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+section .data
+    opt dd 1
+    addrlen dd 16
 
-#define KNOCK_COUNT 3
+section .bss
+    secret_key resb 64
+    dynamic_ports resd 3
+    address resb 16
 
-void generate_dynamic_ports(const char *key, int *ports_buffer) {
-    int hash = 0;
-    for (size_t i = 0; i < strlen(key); i++) {
-        hash += key[i];
-    }
-    // توليد 3 بورتات ديناميكية مشفرة ف الـ Dynamic Range (فوق 1024)
-    for (int i = 0; i < KNOCK_COUNT; i++) {
-        ports_buffer[i] = 10000 + (hash * (i + 1)) % 40000;
-    }
-}
+section .text
+    global _start
 
-int main() {
-    int server_fd, client_fd;
-    struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
-    int state = 0;
-    int dynamic_ports[KNOCK_COUNT];
-    char secret_key[64];
-
-    printf("=================================================================\n");
-    printf("                 stealth-port-knocking        \n");
-    printf("=================================================================\n");
+_start:
+    ; 1. Read Secret Key (sys_read)
+    mov rax, 0          ; sys_read
+    mov rdi, 0          ; stdin
+    mov rsi, secret_key
+    mov rdx, 64
+    syscall
     
-    printf(" Secret Matrix Key (مفتاح تفعيل البورتات): ");
-    if (fgets(secret_key, sizeof(secret_key), stdin) == NULL) return 1;
-    secret_key[strcspn(secret_key, "\n")] = 0;
+    ; Strip newline if exists
+    mov rcx, rax        ; length read
+    xor rsi, rsi
+.strip_nl:
+    cmp rsi, rcx
+    jge .calc_hash
+    cmp byte [secret_key + rsi], 10 ; '\n'
+    jne .next_char
+    mov byte [secret_key + rsi], 0
+    mov rcx, rsi        ; new length
+    jmp .calc_hash
+.next_char:
+    inc rsi
+    jmp .strip_nl
 
-    // حساب البورتات السرية بناءً على المفتاح
-    generate_dynamic_ports(secret_key, dynamic_ports);
+.calc_hash:
+    xor r9, r9          ; hash = 0
+    xor rsi, rsi
+.hash_loop:
+    cmp rsi, rcx
+    jge .gen_ports
+    movzx rbx, byte [secret_key + rsi]
+    cmp rbx, 0
+    je .gen_ports
+    add r9, rbx
+    inc rsi
+    jmp .hash_loop
 
-    printf("[*] Configuration Synced: Dynamic Port Sequence Generated Smoothly!\n");
-    printf("[*] Core System Activated. Infrastructure is now STEALTH. \n");
-    printf("-----------------------------------------------------------------\n");
+.gen_ports:
+    ; Port 1 = 10000 + (hash * 1) % 40000
+    mov rax, r9
+    mov rbx, 1
+    mul rbx
+    mov rbx, 40000
+    xor rdx, rdx
+    div rbx
+    add rdx, 10000
+    mov [dynamic_ports], edx
 
-    while (1) {
-        int current_target_port = dynamic_ports[state];
-        
-        server_fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_fd < 0) return 1;
-        
-        setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-        
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY;
-        address.sin_port = htons(current_target_port);
-        
-        if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-            close(server_fd);
-            continue;
-        }
-        
-        listen(server_fd, 1);
-        printf("[*] OpSec Matrix: Waiting for correct knock on port [%d]...\n", current_target_port);
-        
-        client_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
-        if (client_fd >= 0) {
-            state++;
-            printf("[+] Valid Knock Detected! Network state advanced to Step (%d/%d) \n", state, KNOCK_COUNT);
-            close(client_fd);
-        }
-        
-        close(server_fd);
+    ; Port 2 = 10000 + (hash * 2) % 40000
+    mov rax, r9
+    mov rbx, 2
+    mul rbx
+    mov rbx, 40000
+    xor rdx, rdx
+    div rbx
+    add rdx, 10000
+    mov [dynamic_ports + 4], edx
 
-        if (state == KNOCK_COUNT) {
-            printf("\n[!!!] SUCCESS: FIREWALL BREAK DETECTED. OPENING PROTECTED ROUTE NOW! \n");
-            printf("[*] Executing infrastructure access parameters for 10 seconds...\n");
-            
-            sleep(10); // فتح المنفذ الافتراضي
-            
-            printf("[-] Operational Firewall Closed. Resetting matrix sequence.\n\n");
-            state = 0; 
-        }
-    }
+    ; Port 3 = 10000 + (hash * 3) % 40000
+    mov rax, r9
+    mov rbx, 3
+    mul rbx
+    mov rbx, 40000
+    xor rdx, rdx
+    div rbx
+    add rdx, 10000
+    mov [dynamic_ports + 8], edx
 
-    return 0;
-}
+    xor r12, r12        ; state = 0
+
+.main_loop:
+    ; Get current target port
+    mov eax, [dynamic_ports + r12*4]
+    
+    ; htons simulation (swap bytes for Big-Endian port)
+    xchg al, ah
+    mov [address + 2], ax ; sin_port
+
+    ; 2. Create Socket (sys_socket)
+    mov rax, 41         ; sys_socket
+    mov rdi, 2          ; AF_INET
+    mov rsi, 1          ; SOCK_STREAM
+    mov rdx, 0
+    syscall
+    cmp rax, 0
+    jl .main_loop
+    mov r13, rax        ; r13 = server_fd
+
+    ; 3. Setsockopt (sys_setsockopt)
+    mov rax, 54         ; sys_setsockopt
+    mov rdi, r13
+    mov rsi, 1          ; SOL_SOCKET
+    mov rdx, 2          ; SO_REUSEADDR
+    mov r10, opt
+    mov r8, 4
+    syscall
+
+    ; Prepare sockaddr_in struct
+    mov word [address], 2   ; sin_family = AF_INET
+    mov dword [address + 4], 0 ; sin_addr = INADDR_ANY (0.0.0.0)
+
+    ; 4. Bind (sys_bind)
+    mov rax, 49         ; sys_bind
+    mov rdi, r13
+    mov rsi, address
+    mov rdx, 16
+    syscall
+    cmp rax, 0
+    jl .close_and_continue
+
+    ; 5. Listen (sys_listen)
+    mov rax, 50         ; sys_listen
+    mov rdi, r13
+    mov rsi, 1          ; backlog
+    syscall
+
+    ; 6. Accept (sys_accept)
+    mov rax, 43         ; sys_accept
+    mov rdi, r13
+    mov rsi, 0
+    mov rdx, 0
+    syscall
+    cmp rax, 0
+    jl .close_and_continue
+
+    ; Valid Knock Detected
+    mov r14, rax        ; client_fd
+    inc r12             ; state++
+
+    ; Close client_fd
+    mov rax, 3          ; sys_close
+    mov rdi, r14
+    syscall
+
+.close_and_continue:
+    ; Close server_fd
+    mov rax, 3          ; sys_close
+    mov rdi, r13
+    syscall
+
+    ; Check if state == 3
+    cmp r12, 3
+    jne .main_loop
+
+    ; 7. Success Action: Sleep 10 seconds (sys_nanosleep)
+    ; we use sys_nanosleep with 10 seconds structure
+    push qword 0        ; tv_nsec = 0
+    push qword 10       ; tv_sec = 10
+    mov rax, 35         ; sys_nanosleep
+    mov rdi, rsp
+    mov rsi, 0
+    syscall
+    add rsp, 16         ; restore stack
+
+    ; Reset state
+    xor r12, r12
+    jmp .main_loop
